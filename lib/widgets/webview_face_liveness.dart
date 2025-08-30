@@ -10,7 +10,7 @@ class FaceLivenessResult {
   final bool success;
   final bool isLive;
   final double confidence;
-  final String message;
+  final Object? message;
   final String? sessionId;
   final Map<String, dynamic>? fullResult;
 
@@ -24,11 +24,17 @@ class FaceLivenessResult {
   });
 
   factory FaceLivenessResult.fromJson(Map<String, dynamic> json) {
+    var message = json['message'];
+    // Fallback to string representation for backward compatibility
+    if (message != null && message is! String) {
+      message = message.toString();
+    }
+
     return FaceLivenessResult(
       success: json['success'] ?? false,
       isLive: json['isLive'] ?? false,
       confidence: (json['confidence'] ?? 0.0).toDouble(),
-      message: json['message'] ?? 'Unknown result',
+      message: message ?? 'Unknown result',
       sessionId: json['sessionId'],
       fullResult: json['fullResult'],
     );
@@ -322,7 +328,7 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
       } else if (data['type'] == 'FACE_LIVENESS_ERROR') {
         print('❌ Processing Face Liveness error: ${data['message']}');
         if (widget.onError != null) {
-          widget.onError!(data['message'] ?? 'Unknown error');
+          widget.onError!(data['message']?.toString() ?? 'Unknown error');
         }
       } else if (data['type'] == 'FACE_LIVENESS_CANCEL') {
         print('🚫 Processing Face Liveness cancel');
