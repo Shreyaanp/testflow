@@ -175,7 +175,11 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
     controller!
       ..setNavigationDelegate(
             NavigationDelegate(
-              // Update loading progress if needed
+
+              // Automatically grant WebView camera/microphone permission requests
+              onPermissionRequest: (WebViewPermissionRequest request) {
+                request.grant();
+              },
               onProgress: (int progress) {
                 // Update loading progress if needed
               },
@@ -381,6 +385,10 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
           if (controller != null)
             WebViewWidget(
               controller: controller!,
+              onPermissionRequest: (WebViewPermissionRequest request) {
+                request.grant();
+              },
+
             ),
           if (!isLoading && error == null)
             Positioned(
