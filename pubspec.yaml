@@ -46,6 +46,7 @@ dependencies:
   shared_preferences: ^2.2.2  # For JWT token persistence
   url_launcher: ^6.3.1  # For opening URLs in web testing
   provider: ^6.1.2  # State management
+  face_liveness_detector: ^0.2.8  # Native AWS Face Liveness (Android primary)
   
 
 dev_dependencies:

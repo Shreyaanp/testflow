@@ -22,8 +22,9 @@
   <script type="module">
     import React, { useState, useEffect } from 'https://esm.sh/react@18';
     import ReactDOM from 'https://esm.sh/react-dom@18/client';
-    import { Amplify } from 'https://esm.sh/aws-amplify';
-    import { FaceLivenessDetector } from 'https://esm.sh/@aws-amplify/ui-react-liveness';
+    // Pin and bundle dependencies to avoid nested ESM import issues on some Android WebView engines
+    import { Amplify } from 'https://esm.sh/aws-amplify@5.3.17?bundle';
+    import { FaceLivenessDetector } from 'https://esm.sh/@aws-amplify/ui-react-liveness@1.4.0?bundle';
 
     const BACKEND_URL = 'https://fastapi.mercle.ai';
 

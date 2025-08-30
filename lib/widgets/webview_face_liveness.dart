@@ -6,41 +6,7 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import '../services/auth_service.dart';
-
-// Face Liveness Result Model
-class FaceLivenessResult {
-  final bool success;
-  final bool isLive;
-  final double confidence;
-  final Object? message;
-  final String? sessionId;
-  final Map<String, dynamic>? fullResult;
-
-  FaceLivenessResult({
-    required this.success,
-    required this.isLive,
-    required this.confidence,
-    required this.message,
-    this.sessionId,
-    this.fullResult,
-  });
-
-  factory FaceLivenessResult.fromJson(Map<String, dynamic> json) {
-    var message = json['message'];
-    if (message != null && message is! String) {
-      message = message.toString();
-    }
-
-    return FaceLivenessResult(
-      success: json['success'] ?? false,
-      isLive: json['isLive'] ?? false,
-      confidence: (json['confidence'] ?? 0.0).toDouble(),
-      message: message ?? 'Unknown result',
-      sessionId: json['sessionId'],
-      fullResult: json['fullResult'],
-    );
-  }
-}
+import 'package:mercle/models/face_liveness_result.dart';
 
 class WebViewFaceLiveness extends StatefulWidget {
   final Function(FaceLivenessResult result)? onResult;
@@ -98,10 +64,8 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
   Future<void> _requestCameraPermission() async {
     try {
       final cameraStatus = await Permission.camera.request();
-      final micStatus = await Permission.microphone.request();
 
-      if (cameraStatus != PermissionStatus.granted ||
-          micStatus != PermissionStatus.granted) {
+      if (cameraStatus != PermissionStatus.granted) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -128,78 +92,10 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
           .replaceAll('__SESSION_ID__', sessionId ?? '');
 
       controller = WebViewController()
-        ..setJavaScriptMode(JavaScriptMode.unrestricted);
-
-
-      try {
-        controller!.setBackgroundColor(const Color(0xFF1a1a1a));
-      } catch (e) {
-        print('⚠️ Background color not supported on this platform: $e');
-      }
-
-      controller!
-        ..setNavigationDelegate(
-              NavigationDelegate(
-                onProgress: (int progress) {},
-                onPageStarted: (String url) {
-                  if (mounted) {
-                    setState(() {
-                      isLoading = true;
-                      error = null;
-                    });
-                  }
-                },
-                onPageFinished: (String url) {
-                  if (mounted) {
-                    setState(() {
-                      isLoading = false;
-                    });
-                  }
-                  _setupResultListener();
-                },
-                onHttpError: (HttpResponseError error) {
-                  if (mounted) {
-                    setState(() {
-                      this.error = 'HTTP Error: ${error.response?.statusCode}';
-                      isLoading = false;
-                    });
-                  }
-                },
-                onWebResourceError: (WebResourceError error) {
-                  if (mounted) {
-                    setState(() {
-                      this.error = 'Connection Error: ${error.description}';
-                      isLoading = false;
-                    });
-                  }
-                },
-              ),
-            )
-        ..addJavaScriptChannel(
-              'flutterFaceLiveness',
-              onMessageReceived: (JavaScriptMessage message) {
-                _handleMessageFromReact(message.message);
-              },
-            )
-
-      // Android: auto-grant camera/mic prompts
-      if (controller!.platform is AndroidWebViewController) {
-        (controller!.platform as AndroidWebViewController)
-            .setOnPlatformPermissionRequest((request) {
-          request.grant();
-        });
-      }
-
-      try {
-        controller!.setBackgroundColor(const Color(0xFF1a1a1a));
-      } catch (_) {}
-
-      controller!
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setBackgroundColor(const Color(0xFF1a1a1a))
         ..setNavigationDelegate(
           NavigationDelegate(
-            onPermissionRequest: (WebViewPermissionRequest request) {
-              request.grant();
-            },
             onProgress: (int progress) {},
             onPageStarted: (String url) {
               if (!mounted) return;
@@ -237,8 +133,15 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
             _handleMessageFromReact(message.message);
           },
         )
-
         ..loadHtmlString(html);
+
+      // Android: auto-grant camera prompts from the platform side
+      if (controller!.platform is AndroidWebViewController) {
+        (controller!.platform as AndroidWebViewController)
+            .setOnPlatformPermissionRequest((request) {
+          request.grant();
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() {

@@ -8,7 +8,7 @@ import 'package:mercle/features/onboarding/phoneverification.dart';
 import 'package:mercle/features/onboarding/otpscreen.dart';
 import 'package:mercle/features/onboarding/splashscreen.dart';
 import 'package:mercle/features/onboarding/verification-success.dart';
-import 'package:mercle/widgets/webview_face_liveness.dart';
+import 'package:mercle/widgets/native_face_liveness.dart';
 import 'package:mercle/services/auth_service.dart';
 import 'package:mercle/utils/face_verification_dialogs.dart';
 import 'package:mercle/utils/verification_bottom_sheet.dart';

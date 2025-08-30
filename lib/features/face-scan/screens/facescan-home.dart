@@ -3,7 +3,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:mercle/constants/colors.dart';
 import 'package:mercle/widgets/verify_humanity_card.dart';
-import 'package:mercle/widgets/webview_face_liveness.dart';
+import 'package:mercle/widgets/native_face_liveness.dart';
+import 'package:mercle/models/face_liveness_result.dart';
 import 'package:mercle/services/auth_service.dart';
 import 'package:mercle/utils/verification_bottom_sheet.dart';
 import 'package:provider/provider.dart';
@@ -76,38 +77,24 @@ class _FaceScanSetupState extends State<FaceScanSetup> {
       final sessionId = sessionResult['sessionId'];
       print('🎬 Created liveness session: $sessionId');
 
-      // Step 2: Launch WebView for face liveness detection
+      // Step 2: Launch native Face Liveness (Android)
       if (mounted) {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder:
-                (context) => Scaffold(
-                  backgroundColor: Colors.black,
-                  appBar: AppBar(
-                    title: const Text(
-                      'Face Scan',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    backgroundColor: Colors.black,
-                    leading: IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ),
-                  body: WebViewFaceLiveness(
-                    sessionId: sessionId, // Pass session ID to webview
-                    onResult: (result) {
-                      Navigator.of(context).pop(); // Close webview
-                      _handleFaceScanResult(result, sessionId);
-                    },
-                    onError: (error) {
-                      Navigator.of(context).pop(); // Close webview
-                      _showErrorDialog(error);
-                    },
-                    onCancel: () {
-                      Navigator.of(context).pop(); // Close webview
-                    },
-                  ),
+                (context) => NativeFaceLiveness(
+                  sessionId: sessionId,
+                  onResult: (result) {
+                    Navigator.of(context).pop();
+                    _handleFaceScanResult(result, sessionId);
+                  },
+                  onError: (error) {
+                    Navigator.of(context).pop();
+                    _showErrorDialog(error);
+                  },
+                  onCancel: () {
+                    Navigator.of(context).pop();
+                  },
                 ),
           ),
         );
