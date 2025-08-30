@@ -1,0 +1,89 @@
+# --- Flutter / Dart ---
+.buildlog/
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+.melos_tool/
+.metadata
+.pub-cache/
+coverage/
+build/
+
+# Lockfile: keep for apps (ignore only if this repo is a package)
+# pubspec.lock
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- Android ---
+android/local.properties
+android/**/generated/
+android/**/build/
+android/.gradle/
+**/gradle-build/
+# Native intermediates that bloat history
+android/**/intermediates/
+android/**/merged_native_libs/
+android/**/tmp/
+# Generated entrypoints
+android/**/GeneratedPluginRegistrant.java
+android/**/GeneratedPluginRegistrant.kt
+# Artifacts
+*.apk
+*.aab
+
+# --- iOS / macOS ---
+ios/Pods/
+ios/.symlinks/
+ios/**/Flutter/ephemeral/
+ios/**/Flutter/flutter_export_environment.sh
+ios/**/Flutter/Generated.xcconfig
+ios/**/Runner.xcworkspace/
+# Generated registrants
+ios/**/GeneratedPluginRegistrant.*
+# Archives and artifacts
+*.ipa
+*.xcarchive
+
+macos/Pods/
+macos/**/Flutter/ephemeral/
+macos/**/Flutter/Flutter-Generated.xcconfig
+# Generated registrants
+macos/**/GeneratedPluginRegistrant.*
+
+# --- Windows / Linux ---
+windows/**/flutter/ephemeral/
+linux/**/flutter/ephemeral/
+# Generated registrants
+windows/**/generated_plugin_registrant.*
+linux/**/generated_plugin_registrant.*
+
+# --- Web ---
+web/.dart_tool/
+.web-entrypoint.dart
+
+# --- Amplify (keep project config, ignore local/env and build) ---
+amplify/#current-cloud-backend/
+amplify/.config/local-env-info.json
+amplify/.config/local-aws-info.json
+amplify/backend/.temp/
+amplify/mock-data/
+
+# --- Misc binaries ---
+*.so
+*.dylib
+*.dll
+*.exe
+*.obj
+*.o
+*.a
+*.lib
+*.pyc
+__pycache__/
