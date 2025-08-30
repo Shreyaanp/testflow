@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../services/auth_service.dart';
 
@@ -151,17 +152,26 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
 
   void _initializeWebView() {
     if (!_urlInitialized) return; // Wait for URL to be initialized
-    
+
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted);
-    
+
+    // Automatically grant camera and microphone access in the WebView on Android
+    if (controller!.platform is AndroidWebViewController) {
+      // ignore: unawaited_futures
+      (controller!.platform as AndroidWebViewController)
+          .setOnPlatformPermissionRequest((request) {
+        request.grant();
+      });
+    }
+
     // Set background color only on supported platforms
     try {
       controller!.setBackgroundColor(const Color(0xFF1a1a1a));
     } catch (e) {
       print('⚠️ Background color not supported on this platform: $e');
     }
-    
+
     controller!
       ..setNavigationDelegate(
             NavigationDelegate(
@@ -378,6 +388,7 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
               onPermissionRequest: (WebViewPermissionRequest request) {
                 request.grant();
               },
+
             ),
           if (!isLoading && error == null)
             Positioned(
