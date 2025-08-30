@@ -78,11 +78,14 @@ class _AuthWrapperState extends State<AuthWrapper> {
   Future<void> _checkAuthStatus() async {
     try {
       final isAuthenticated = await AuthService.isAuthenticated();
+      if (!mounted) return;
       final isOnboardingComplete = await AuthService.isOnboardingComplete();
+      if (!mounted) return;
 
       if (isAuthenticated) {
         // Verify token is still valid and get user data
         final userResult = await AuthService.getCurrentUser();
+        if (!mounted) return;
         final tokenValid =
             userResult['success'] && !userResult.containsKey('requiresAuth');
 
@@ -95,7 +98,8 @@ class _AuthWrapperState extends State<AuthWrapper> {
           
           // If user status is 'verified', they should go to main app regardless of onboarding flag
           final shouldShowMainApp = userStatus == 'verified' || isOnboardingComplete;
-          
+
+          if (!mounted) return;
           setState(() {
             _isAuthenticated = true;
             _isOnboardingComplete = shouldShowMainApp;
@@ -106,9 +110,11 @@ class _AuthWrapperState extends State<AuthWrapper> {
           if (userStatus == 'verified' && !isOnboardingComplete) {
             print('✅ User is verified, marking onboarding as complete');
             await AuthService.completeOnboarding();
+            if (!mounted) return;
           }
         } else {
           // Token invalid
+          if (!mounted) return;
           setState(() {
             _isAuthenticated = false;
             _isOnboardingComplete = false;
@@ -116,6 +122,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
           });
         }
       } else {
+        if (!mounted) return;
         setState(() {
           _isAuthenticated = false;
           _isOnboardingComplete = false;
@@ -124,6 +131,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
       }
     } catch (e) {
       print('❌ Error checking auth status: $e');
+      if (!mounted) return;
       setState(() {
         _isAuthenticated = false;
         _isOnboardingComplete = false;

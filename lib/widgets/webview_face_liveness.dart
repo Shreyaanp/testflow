@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import '../services/auth_service.dart';
@@ -11,7 +12,7 @@ class FaceLivenessResult {
   final bool success;
   final bool isLive;
   final double confidence;
-  final String message;
+  final Object? message;
   final String? sessionId;
   final Map<String, dynamic>? fullResult;
 
@@ -25,11 +26,16 @@ class FaceLivenessResult {
   });
 
   factory FaceLivenessResult.fromJson(Map<String, dynamic> json) {
+    var message = json['message'];
+    if (message != null && message is! String) {
+      message = message.toString();
+    }
+
     return FaceLivenessResult(
       success: json['success'] ?? false,
       isLive: json['isLive'] ?? false,
       confidence: (json['confidence'] ?? 0.0).toDouble(),
-      message: json['message'] ?? 'Unknown result',
+      message: message ?? 'Unknown result',
       sessionId: json['sessionId'],
       fullResult: json['fullResult'],
     );
@@ -69,35 +75,28 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
     _initializeWebView();
     _startTimeout();
   }
-  
+
   @override
   void dispose() {
     _timeoutTimer?.cancel();
     super.dispose();
   }
-  
+
   void _startTimeout() {
-    // Set a 60 second timeout for face liveness
     _timeoutTimer = Timer(const Duration(seconds: 60), () {
       if (mounted && isLoading) {
         setState(() {
           error = 'Face liveness timed out. Please try again.';
           isLoading = false;
         });
-        if (widget.onError != null) {
-          widget.onError!('Face liveness timed out. Please try again.');
-        }
+        widget.onError?.call('Face liveness timed out. Please try again.');
       }
     });
   }
 
 
   Future<void> _requestCameraPermission() async {
-    // Skip permission request on macOS as it's handled by entitlements
-    // and will show system dialog automatically when camera is accessed
     try {
-      // Request both camera and microphone permissions as some WebView
-      // implementations require microphone access for camera streams
       final cameraStatus = await Permission.camera.request();
       final micStatus = await Permission.microphone.request();
 
@@ -115,8 +114,7 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
         }
       }
     } catch (e) {
-      // Permission handler not available on this platform
-      print('⚠️ Permission handler not available on this platform: $e');
+      // ignore
     }
   }
 
@@ -131,6 +129,7 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
 
       controller = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted);
+
 
       try {
         controller!.setBackgroundColor(const Color(0xFF1a1a1a));
@@ -182,6 +181,63 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
                 _handleMessageFromReact(message.message);
               },
             )
+
+      // Android: auto-grant camera/mic prompts
+      if (controller!.platform is AndroidWebViewController) {
+        (controller!.platform as AndroidWebViewController)
+            .setOnPlatformPermissionRequest((request) {
+          request.grant();
+        });
+      }
+
+      try {
+        controller!.setBackgroundColor(const Color(0xFF1a1a1a));
+      } catch (_) {}
+
+      controller!
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onPermissionRequest: (WebViewPermissionRequest request) {
+              request.grant();
+            },
+            onProgress: (int progress) {},
+            onPageStarted: (String url) {
+              if (!mounted) return;
+              setState(() {
+                isLoading = true;
+                error = null;
+              });
+            },
+            onPageFinished: (String url) {
+              if (!mounted) return;
+              setState(() {
+                isLoading = false;
+              });
+              _setupResultListener();
+            },
+            onHttpError: (HttpResponseError err) {
+              if (!mounted) return;
+              setState(() {
+                error = 'HTTP Error: ${err.response?.statusCode}';
+                isLoading = false;
+              });
+            },
+            onWebResourceError: (WebResourceError err) {
+              if (!mounted) return;
+              setState(() {
+                error = 'Connection Error: ${err.description}';
+                isLoading = false;
+              });
+            },
+          ),
+        )
+        ..addJavaScriptChannel(
+          'flutterFaceLiveness',
+          onMessageReceived: (JavaScriptMessage message) {
+            _handleMessageFromReact(message.message);
+          },
+        )
+
         ..loadHtmlString(html);
     } catch (e) {
       if (mounted) {
@@ -190,117 +246,56 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
           isLoading = false;
         });
       }
+
       if (widget.onError != null) {
         widget.onError!('Failed to load face liveness');
       }
+      widget.onError?.call('Failed to load face liveness');
     }
   }
 
-  /// Set up JavaScript listener for Face Liveness results
   void _setupResultListener() {
     if (controller == null) return;
-    
-    // Inject JavaScript to set up a listener for results
+
     controller!.runJavaScript('''
-      console.log('🔧 Setting up Flutter communication...');
-      
-      // Ensure flutterFaceLiveness is available
       if (!window.flutterFaceLiveness) {
-        console.error('❌ flutterFaceLiveness channel not available!');
-      } else {
-        console.log('✅ flutterFaceLiveness channel is available');
+        console.error('flutterFaceLiveness channel not available!');
       }
-      
       window.addEventListener('message', function(event) {
-        console.log('📨 Received postMessage:', event.data);
         if (event.data && typeof event.data === 'string') {
           try {
             const data = JSON.parse(event.data);
-            console.log('📊 Parsed message data:', data);
             if (data.type && (data.type === 'FACE_LIVENESS_RESULT' || data.type === 'FACE_LIVENESS_ERROR' || data.type === 'FACE_LIVENESS_CANCEL')) {
-              // Forward the result to Flutter
-              console.log('📤 Forwarding to Flutter:', data);
               if (window.flutterFaceLiveness) {
                 window.flutterFaceLiveness.postMessage(JSON.stringify(data));
-              } else {
-                console.error('❌ Cannot forward to Flutter: channel not available');
               }
             }
-          } catch (e) {
-            console.error('❌ Error parsing message:', e);
-          }
+          } catch (e) {}
         }
       });
-      
-      // Set up a global variable to receive results from React component
       window.sendResultToFlutter = function(result) {
-        console.log('📤 sendResultToFlutter called with:', result);
         try {
-          const messageData = {
-            type: 'FACE_LIVENESS_RESULT',
-            ...result
-          };
-          console.log('📤 Sending via sendResultToFlutter:', messageData);
+          const messageData = { type: 'FACE_LIVENESS_RESULT', ...result };
           if (window.flutterFaceLiveness) {
             window.flutterFaceLiveness.postMessage(JSON.stringify(messageData));
-          } else {
-            console.error('❌ flutterFaceLiveness channel not available for sendResultToFlutter');
           }
-        } catch (e) {
-          console.error('❌ Error in sendResultToFlutter:', e);
-        }
+        } catch (e) {}
       };
-      
-      // Test function to verify communication
-      window.testFlutterCommunication = function() {
-        console.log('🧪 Testing Flutter communication...');
-        if (window.flutterFaceLiveness) {
-          window.flutterFaceLiveness.postMessage(JSON.stringify({
-            type: 'FACE_LIVENESS_RESULT',
-            success: true,
-            isLive: true,
-            confidence: 0.95,
-            message: 'Test message from JavaScript',
-            sessionId: 'test'
-          }));
-        } else {
-          console.error('❌ Cannot test: flutterFaceLiveness channel not available');
-        }
-      };
-      
-      console.log('✅ Flutter result listener initialized');
     ''');
   }
 
-  /// Handle messages from React app
   void _handleMessageFromReact(String message) {
     try {
-      print('📨 Received message from React: $message');
-      
-      // Validate message is not empty
-      if (message.isEmpty) {
-        print('⚠️ Empty message received from React');
-        return;
-      }
-      
+      if (message.isEmpty) return;
+
       final Map<String, dynamic> data = json.decode(message);
-      print('📊 Parsed message data: $data');
 
       if (data['type'] == 'FACE_LIVENESS_RESULT') {
-        print('✅ Processing Face Liveness result');
-        
-        // Cancel timeout since we received a result
         _timeoutTimer?.cancel();
-        
-        // Convert to FaceLivenessResult and notify
+
         final result = FaceLivenessResult.fromJson(data);
-        print('📋 Converted result: success=${result.success}, isLive=${result.isLive}, confidence=${result.confidence}');
+        widget.onResult?.call(result);
 
-        if (widget.onResult != null) {
-          widget.onResult!(result);
-        }
-
-        // Close WebView after result
         if (mounted && result.success) {
           Future.delayed(const Duration(milliseconds: 500), () {
             if (mounted && Navigator.of(context).canPop()) {
@@ -309,35 +304,16 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
           });
         }
       } else if (data['type'] == 'FACE_LIVENESS_ERROR') {
-        print('❌ Processing Face Liveness error: ${data['message']}');
-        if (widget.onError != null) {
-          widget.onError!(data['message'] ?? 'Unknown error');
-        }
+        widget.onError?.call(data['message']?.toString() ?? 'Unknown error');
       } else if (data['type'] == 'FACE_LIVENESS_CANCEL') {
-        print('🚫 Processing Face Liveness cancel');
-        if (widget.onCancel != null) {
-          widget.onCancel!();
-        }
-      } else {
-        print('⚠️ Unknown message type: ${data['type']}');
+        widget.onCancel?.call();
       }
-    } catch (e, stackTrace) {
-      print('❌ Error handling message from React: $e');
-      print('📍 Stack trace: $stackTrace');
-      print('📨 Original message: $message');
-      
-      // Try to determine the specific error
+    } catch (e) {
       String errorMessage = 'Failed to process face liveness result';
       if (e is FormatException) {
         errorMessage = 'Invalid message format from face liveness';
-        print('🔍 Format error details: ${e.message}');
-      } else if (e.toString().contains('type')) {
-        errorMessage = 'Missing message type in face liveness response';
       }
-      
-      if (widget.onError != null) {
-        widget.onError!(errorMessage);
-      }
+      widget.onError?.call(errorMessage);
     }
   }
 
@@ -350,14 +326,7 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // WebView fills entire body
-          if (controller != null)
-            WebViewWidget(
-              controller: controller!,
-              onPermissionRequest: (WebViewPermissionRequest request) {
-                request.grant();
-              },
-            ),
+          if (controller != null) WebViewWidget(controller: controller!),
           if (!isLoading && error == null)
             Positioned(
               top: MediaQuery.of(context).padding.top + 16,
@@ -373,8 +342,6 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
                 ),
               ),
             ),
-
-          // Loading overlay
           if (isLoading)
             Container(
               color: Colors.black87,
@@ -394,8 +361,6 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
                 ),
               ),
             ),
-
-          // Error overlay
           if (error != null)
             Container(
               color: Colors.black87,
@@ -403,11 +368,7 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(
-                      Icons.error_outline,
-                      color: Colors.red,
-                      size: 64,
-                    ),
+                    const Icon(Icons.error_outline, color: Colors.red, size: 64),
                     const SizedBox(height: 16),
                     const Text(
                       'Connection Error',
@@ -420,10 +381,7 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
                     const SizedBox(height: 8),
                     Text(
                       error!,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
+                      style: const TextStyle(color: Colors.white70, fontSize: 14),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 24),
@@ -432,9 +390,7 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
                       children: [
                         ElevatedButton(
                           onPressed: () {
-                            setState(() {
-                              error = null;
-                            });
+                            setState(() => error = null);
                             _initializeWebView();
                           },
                           child: const Text('Try Again'),
