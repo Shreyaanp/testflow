@@ -147,8 +147,18 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
   void _initializeWebView() {
     if (!_urlInitialized) return; // Wait for URL to be initialized
     
-    controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted);
+    controller = WebViewController(
+      // Automatically grant any permission requests (camera, microphone, etc.)
+      // coming from the loaded web content. Without this, the WebView denies
+      // access even if the app itself already has the necessary OS-level
+      // permissions, which prevents the face liveness page from accessing the
+      // camera. Granting the request here ensures that once the user has
+      // approved the permission for the app, the embedded WebView can also use
+      // the camera.
+      onPermissionRequest: (WebViewPermissionRequest request) {
+        request.grant();
+      },
+    )..setJavaScriptMode(JavaScriptMode.unrestricted);
     
     // Set background color only on supported platforms
     try {
