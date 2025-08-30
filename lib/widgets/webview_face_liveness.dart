@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import '../services/auth_service.dart';
 
 // Face Liveness Result Model
@@ -59,18 +60,13 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
   String? error;
   Timer? _timeoutTimer;
 
-  // Your deployed React Face Liveness app URL
-  static const String _faceLivenessUrl =
-      'https://face-liveness-react-qdq4tm1t5.vercel.app';
-  
-  String _faceLivenessUrlWithToken = '';
-  bool _urlInitialized = false;
+  static const String _faceLivenessHtmlPath = 'assets/face_liveness/index.html';
 
   @override
   void initState() {
     super.initState();
     _requestCameraPermission();
-    _initializeUrlWithToken();
+    _initializeWebView();
     _startTimeout();
   }
   
@@ -95,31 +91,6 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
     });
   }
 
-  /// Initialize URL with authentication token and sessionId
-  Future<void> _initializeUrlWithToken() async {
-    try {
-      final token = await AuthService.getToken();
-      final sessionId = widget.sessionId;
-      
-      if (token != null && sessionId != null) {
-        _faceLivenessUrlWithToken = '$_faceLivenessUrl?token=${Uri.encodeComponent(token)}&sessionId=${Uri.encodeComponent(sessionId)}';
-        print('🔑 Face liveness URL with token and sessionId initialized');
-      } else if (token != null) {
-        _faceLivenessUrlWithToken = '$_faceLivenessUrl?token=${Uri.encodeComponent(token)}';
-        print('🔑 Face liveness URL with token initialized (no sessionId)');
-      } else {
-        _faceLivenessUrlWithToken = _faceLivenessUrl;
-        print('⚠️ No auth token available, using URL without token');
-      }
-      _urlInitialized = true;
-      _initializeWebView();
-    } catch (e) {
-      print('❌ Error initializing URL with token: $e');
-      _faceLivenessUrlWithToken = _faceLivenessUrl;
-      _urlInitialized = true;
-      _initializeWebView();
-    }
-  }
 
   Future<void> _requestCameraPermission() async {
     // Skip permission request on macOS as it's handled by entitlements
@@ -149,72 +120,83 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
     }
   }
 
-  void _initializeWebView() {
-    if (!_urlInitialized) return; // Wait for URL to be initialized
-    
-    controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted);
-    
-    // Set background color only on supported platforms
+  Future<void> _initializeWebView() async {
     try {
-      controller!.setBackgroundColor(const Color(0xFF1a1a1a));
-    } catch (e) {
-      print('⚠️ Background color not supported on this platform: $e');
-    }
-    
-    controller!
-      ..setNavigationDelegate(
-            NavigationDelegate(
+      final token = await AuthService.getToken();
+      final sessionId = widget.sessionId;
+      String html = await rootBundle.loadString(_faceLivenessHtmlPath);
+      html = html
+          .replaceAll('__TOKEN__', token ?? '')
+          .replaceAll('__SESSION_ID__', sessionId ?? '');
 
-              // Automatically grant WebView camera/microphone permission requests
-              onPermissionRequest: (WebViewPermissionRequest request) {
-                request.grant();
+      controller = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted);
+
+      try {
+        controller!.setBackgroundColor(const Color(0xFF1a1a1a));
+      } catch (e) {
+        print('⚠️ Background color not supported on this platform: $e');
+      }
+
+      controller!
+        ..setNavigationDelegate(
+              NavigationDelegate(
+                onPermissionRequest: (WebViewPermissionRequest request) {
+                  request.grant();
+                },
+                onProgress: (int progress) {},
+                onPageStarted: (String url) {
+                  if (mounted) {
+                    setState(() {
+                      isLoading = true;
+                      error = null;
+                    });
+                  }
+                },
+                onPageFinished: (String url) {
+                  if (mounted) {
+                    setState(() {
+                      isLoading = false;
+                    });
+                  }
+                  _setupResultListener();
+                },
+                onHttpError: (HttpResponseError error) {
+                  if (mounted) {
+                    setState(() {
+                      this.error = 'HTTP Error: ${error.response?.statusCode}';
+                      isLoading = false;
+                    });
+                  }
+                },
+                onWebResourceError: (WebResourceError error) {
+                  if (mounted) {
+                    setState(() {
+                      this.error = 'Connection Error: ${error.description}';
+                      isLoading = false;
+                    });
+                  }
+                },
+              ),
+            )
+        ..addJavaScriptChannel(
+              'flutterFaceLiveness',
+              onMessageReceived: (JavaScriptMessage message) {
+                _handleMessageFromReact(message.message);
               },
-              onProgress: (int progress) {
-                // Update loading progress if needed
-              },
-              onPageStarted: (String url) {
-                if (mounted) {
-                  setState(() {
-                    isLoading = true;
-                    error = null;
-                  });
-                }
-              },
-              onPageFinished: (String url) {
-                if (mounted) {
-                  setState(() {
-                    isLoading = false;
-                  });
-                }
-                // Set up result listener with JavaScript
-                _setupResultListener();
-              },
-              onHttpError: (HttpResponseError error) {
-                if (mounted) {
-                  setState(() {
-                    this.error = 'HTTP Error: ${error.response?.statusCode}';
-                    isLoading = false;
-                  });
-                }
-              },
-              onWebResourceError: (WebResourceError error) {
-                if (mounted) {
-                  setState(() {
-                    this.error = 'Connection Error: ${error.description}';
-                    isLoading = false;
-                  });
-                }
-              },
-            ),
-          )
-      ..addJavaScriptChannel(
-            'flutterFaceLiveness',
-            onMessageReceived: (JavaScriptMessage message) {
-              _handleMessageFromReact(message.message);
-            },
-          )
-      ..loadRequest(Uri.parse(_urlInitialized ? _faceLivenessUrlWithToken : _faceLivenessUrl));
+            )
+        ..loadHtmlString(html);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          error = 'Failed to load face liveness';
+          isLoading = false;
+        });
+      }
+      if (widget.onError != null) {
+        widget.onError!('Failed to load face liveness');
+      }
+    }
   }
 
   /// Set up JavaScript listener for Face Liveness results
