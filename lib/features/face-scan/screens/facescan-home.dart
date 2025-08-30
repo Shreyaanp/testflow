@@ -9,6 +9,8 @@ import 'package:mercle/services/auth_service.dart';
 import 'package:mercle/utils/verification_bottom_sheet.dart';
 import 'package:provider/provider.dart';
 import 'package:mercle/providers/user_provider.dart';
+import 'dart:io' show Platform;
+import 'package:url_launcher/url_launcher.dart';
 
 class FaceScanSetup extends StatefulWidget {
   static const String routeName = '/face-scan-setup';
@@ -77,27 +79,36 @@ class _FaceScanSetupState extends State<FaceScanSetup> {
       final sessionId = sessionResult['sessionId'];
       print('🎬 Created liveness session: $sessionId');
 
-      // Step 2: Launch native Face Liveness (Android)
-      if (mounted) {
+      // Step 2: Launch liveness capture per-platform
+      if (!mounted) return;
+      if (Platform.isAndroid) {
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder:
-                (context) => NativeFaceLiveness(
-                  sessionId: sessionId,
-                  onResult: (result) {
-                    Navigator.of(context).pop();
-                    _handleFaceScanResult(result, sessionId);
-                  },
-                  onError: (error) {
-                    Navigator.of(context).pop();
-                    _showErrorDialog(error);
-                  },
-                  onCancel: () {
-                    Navigator.of(context).pop();
-                  },
-                ),
+            builder: (context) => NativeFaceLiveness(
+              sessionId: sessionId,
+              onResult: (result) {
+                Navigator.of(context).pop();
+                _handleFaceScanResult(result, sessionId);
+              },
+              onError: (error) {
+                Navigator.of(context).pop();
+                _showErrorDialog(error);
+              },
+              onCancel: () {
+                Navigator.of(context).pop();
+              },
+            ),
           ),
         );
+      } else if (Platform.isIOS) {
+        final url = Uri.parse('https://face-liveness-react-dv7o2xss6.vercel.app?sessionId=$sessionId');
+        if (await canLaunchUrl(url)) {
+          await launchUrl(url, mode: LaunchMode.externalApplication);
+          // Show verification bottom sheet while user completes in Safari
+          _showVerificationBottomSheet(sessionId);
+        } else {
+          _showErrorDialog('Could not open Face Scan in Safari');
+        }
       }
     } catch (e) {
       print('Error starting face scan: $e');
