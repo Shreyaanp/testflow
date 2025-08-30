@@ -94,6 +94,7 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
     });
   }
 
+
   Future<void> _requestCameraPermission() async {
     try {
       final cameraStatus = await Permission.camera.request();
@@ -128,6 +129,58 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
 
       controller = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted);
+
+
+      try {
+        controller!.setBackgroundColor(const Color(0xFF1a1a1a));
+      } catch (e) {
+        print('⚠️ Background color not supported on this platform: $e');
+      }
+
+      controller!
+        ..setNavigationDelegate(
+              NavigationDelegate(
+                onProgress: (int progress) {},
+                onPageStarted: (String url) {
+                  if (mounted) {
+                    setState(() {
+                      isLoading = true;
+                      error = null;
+                    });
+                  }
+                },
+                onPageFinished: (String url) {
+                  if (mounted) {
+                    setState(() {
+                      isLoading = false;
+                    });
+                  }
+                  _setupResultListener();
+                },
+                onHttpError: (HttpResponseError error) {
+                  if (mounted) {
+                    setState(() {
+                      this.error = 'HTTP Error: ${error.response?.statusCode}';
+                      isLoading = false;
+                    });
+                  }
+                },
+                onWebResourceError: (WebResourceError error) {
+                  if (mounted) {
+                    setState(() {
+                      this.error = 'Connection Error: ${error.description}';
+                      isLoading = false;
+                    });
+                  }
+                },
+              ),
+            )
+        ..addJavaScriptChannel(
+              'flutterFaceLiveness',
+              onMessageReceived: (JavaScriptMessage message) {
+                _handleMessageFromReact(message.message);
+              },
+            )
 
       // Android: auto-grant camera/mic prompts
       if (controller!.platform is AndroidWebViewController) {
@@ -184,6 +237,7 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
             _handleMessageFromReact(message.message);
           },
         )
+
         ..loadHtmlString(html);
     } catch (e) {
       if (mounted) {
@@ -191,6 +245,10 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
           error = 'Failed to load face liveness';
           isLoading = false;
         });
+      }
+
+      if (widget.onError != null) {
+        widget.onError!('Failed to load face liveness');
       }
       widget.onError?.call('Failed to load face liveness');
     }
