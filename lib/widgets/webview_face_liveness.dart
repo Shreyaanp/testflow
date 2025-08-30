@@ -165,6 +165,7 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
     controller!
       ..setNavigationDelegate(
             NavigationDelegate(
+
               // Automatically grant WebView camera/microphone permission requests
               onPermissionRequest: (WebViewPermissionRequest request) {
                 request.grant();
@@ -371,7 +372,13 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
         fit: StackFit.expand,
         children: [
           // WebView fills entire body
-          if (controller != null) WebViewWidget(controller: controller!),
+          if (controller != null)
+            WebViewWidget(
+              controller: controller!,
+              onPermissionRequest: (WebViewPermissionRequest request) {
+                request.grant();
+              },
+            ),
           if (!isLoading && error == null)
             Positioned(
               top: MediaQuery.of(context).padding.top + 16,
