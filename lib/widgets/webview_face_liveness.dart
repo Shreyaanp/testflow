@@ -125,13 +125,18 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
     // Skip permission request on macOS as it's handled by entitlements
     // and will show system dialog automatically when camera is accessed
     try {
-      final status = await Permission.camera.request();
-      if (status != PermissionStatus.granted) {
+      // Request both camera and microphone permissions as some WebView
+      // implementations require microphone access for camera streams
+      final cameraStatus = await Permission.camera.request();
+      final micStatus = await Permission.microphone.request();
+
+      if (cameraStatus != PermissionStatus.granted ||
+          micStatus != PermissionStatus.granted) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'Camera permission is required for face liveness detection',
+                'Camera access is required for face liveness detection',
               ),
               backgroundColor: Colors.red,
             ),
@@ -139,7 +144,7 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
         }
       }
     } catch (e) {
-      // Permission handler not available on macOS, skip
+      // Permission handler not available on this platform
       print('⚠️ Permission handler not available on this platform: $e');
     }
   }
@@ -160,6 +165,7 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
     controller!
       ..setNavigationDelegate(
             NavigationDelegate(
+              // Update loading progress if needed
               onProgress: (int progress) {
                 // Update loading progress if needed
               },
@@ -362,7 +368,13 @@ class _WebViewFaceLivenessState extends State<WebViewFaceLiveness> {
         fit: StackFit.expand,
         children: [
           // WebView fills entire body
-          if (controller != null) WebViewWidget(controller: controller!),
+          if (controller != null)
+            WebViewWidget(
+              controller: controller!,
+              onPermissionRequest: (WebViewPermissionRequest request) {
+                request.grant();
+              },
+            ),
           if (!isLoading && error == null)
             Positioned(
               top: MediaQuery.of(context).padding.top + 16,
