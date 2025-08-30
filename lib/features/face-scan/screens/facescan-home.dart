@@ -135,10 +135,11 @@ class _FaceScanSetupState extends State<FaceScanSetup> {
       // Show "Under Verification" modal and start polling
       _showVerificationBottomSheet(sessionId);
     } else {
+      final message = result.message;
       _showErrorDialog(
-        result.message.isNotEmpty
-            ? result.message
-            : 'Face scan failed. Please try again.',
+        message is String && message.isNotEmpty
+            ? message
+            : (message?.toString() ?? 'Face scan failed. Please try again.'),
       );
     }
   }
